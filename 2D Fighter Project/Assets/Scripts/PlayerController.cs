@@ -4,52 +4,105 @@ using UnityEngine;
 using UnityEngine.Experimental.AI;
 using UnityEngine.InputSystem;
 
+[RequireComponent(typeof(Rigidbody2D))]
 public class PlayerController : MonoBehaviour
 {
+    [SerializeField] float speed;
+    [SerializeField] float jumpPower;
+    [SerializeField] Transform groundCheck;
+    [SerializeField] LayerMask groundLayer;
+
+
     private Rigidbody2D playerRigidbody;
     PlayerInputActions playerInputActions;
 
+    //Props
+    public Vector2 _inputVector { get; private set; }
+    public bool _isAttack { get; private set; }
+
+    //Events & Delegates
+    public static PlayerController Instance { get; private set; }
+
+    public static Action OnAttackAnimation;
+
     private void Awake()
     {
+        _isAttack = false;
+        Instance = this;
+
         playerRigidbody = GetComponent<Rigidbody2D>();
         playerInputActions = new PlayerInputActions();
         playerInputActions.Player.Enable();
-        playerInputActions.Player.Jump.performed += Jump;
-        playerInputActions.Player.Move.performed += MoveController;
-    }/*
-    private void FixedUpdate()
+        playerInputActions.Player.Jump.performed += Jump_Performend;
+        playerInputActions.Player.Attacks.started += Attacks_Performed;
+        playerInputActions.Player.Attacks.performed += Attacks_Performed;
+        playerInputActions.Player.Attacks.canceled += Attacks_Performed;
+    }
+    
+    private void OnDestroy()
     {
-        Vector2 inputVector = playerInputActions.Player.Move.ReadValue<Vector2>();
+        playerInputActions.Player.Jump.performed -= Jump_Performend;
+        playerInputActions.Player.Attacks.started -= Attacks_Performed;
+        playerInputActions.Player.Disable();
 
-        float speed = 5;
-
-        playerRigidbody.AddForce(new Vector2(inputVector.x, inputVector.y) * speed);
     }
 
-    */
-    private void Jump(InputAction.CallbackContext context)
+    private void FixedUpdate()
     {
-        Debug.Log("Çalışıyor" + context);
-        if (context.performed)
+            Movement();
+    }
+
+    private void Movement()
+    {
+        Vector2 inputVector = playerInputActions.Player.Move.ReadValue<Vector2>();
+        _inputVector = inputVector;
+        PlayerRotation();
+        playerRigidbody.linearVelocityX = inputVector.x * speed * Time.fixedDeltaTime;
+    }
+
+    private void PlayerRotation()
+    {
+        if (_inputVector.x == 1f)
+            gameObject.transform.rotation = Quaternion.Euler(0, 0, 0);
+        else if (_inputVector.x == -1f)
+            gameObject.transform.rotation = Quaternion.Euler(0, 180, 0);
+    }
+
+    private void Jump_Performend(InputAction.CallbackContext context)
+    {
+        if (context.performed && IsGrounded())
         {
-            playerRigidbody.AddForce(Vector2.up * 5f, ForceMode2D.Impulse);
+            playerRigidbody.linearVelocityY = jumpPower * Time.deltaTime;
         }
     }
 
-
-
-
-
-    
-    private void MoveController(InputAction.CallbackContext context)
+    private bool IsGrounded()
     {
-        Debug.Log("Çalışıyor" + context);
+        return Physics2D.OverlapCircle(groundCheck.position, 0.2f, groundLayer);
+    }
 
-        Vector2 inputVector = context.ReadValue<Vector2>();
+    private void Attacks_Performed(InputAction.CallbackContext context)
+    {
+        Debug.Log(context.phase);
 
-        float speed = 5f;
+        if (context.phase == InputActionPhase.Started)
+        {
+            _isAttack = true;
+            Debug.Log("Attack started!");
+        }
+        else if (context.phase == InputActionPhase.Performed)
+        {
+            if (_isAttack)
+            {
+                OnAttackAnimation?.Invoke();
+                Debug.Log("Attack performed!");
+            }
+        }
+        else if (context.phase == InputActionPhase.Canceled)
+        {
+            _isAttack = false;
+            Debug.Log("Attack canceled!");
+        }
 
-        playerRigidbody.AddForce(new Vector3(inputVector.x, 0, 0) * speed * Time.fixedDeltaTime, ForceMode2D.Force);
-        
     }
 }
